@@ -95,12 +95,14 @@ class MapData:
                     )
                 )
             elif e.get("type") in ["soldier", "caco_demon", "cyber_demon"]:
+                patrol_data = e.get("patrol", [])
+                patrol_points = [tuple(p) for p in patrol_data] if patrol_data else []
                 entities.append(
                     NPCDef(
                         type=e["type"],
                         x=e["x"],
                         y=e["y"],
-                        patrol=e.get("patrol", []),
+                        patrol=patrol_points,
                         health=e.get("health", 100),
                     )
                 )

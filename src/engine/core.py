@@ -125,10 +125,22 @@ class Game:
             elif self.state == "game":
                 self.update()
                 self.draw()
+            elif self.state == "editor":
+                self.run_editor()
             elif self.state == "win":
                 self.draw_win_screen()
 
             pg.display.flip()
+
+    def run_editor(self):
+        from pathlib import Path
+        import sys
+
+        sys.path.insert(0, str(Path(__file__).parent.parent))
+        from editor.editor import Editor
+
+        editor = Editor()
+        editor.run()
 
     def draw_win_screen(self):
         self.screen.fill((0, 0, 0))

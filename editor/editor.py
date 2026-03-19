@@ -250,14 +250,27 @@ class Editor:
                 if entity:
                     self.current_map.entities.append(entity)
 
-            elif self.mode == "path" and self.selected_npc_for_path:
-                key = (
-                    int(self.selected_npc_for_path[0]),
-                    int(self.selected_npc_for_path[1]),
-                )
-                if key not in self.npc_paths:
-                    self.npc_paths[key] = []
-                self.npc_paths[key].append((grid_x, grid_y))
+            elif self.mode == "path":
+                npc_clicked = self._find_npc_at(grid_x, grid_y)
+
+                if npc_clicked:
+                    self.selected_npc_for_path = npc_clicked
+                elif self.selected_npc_for_path:
+                    key = (
+                        int(self.selected_npc_for_path[0]),
+                        int(self.selected_npc_for_path[1]),
+                    )
+                    if key not in self.npc_paths:
+                        self.npc_paths[key] = []
+                    self.npc_paths[key].append((grid_x, grid_y))
+
+    def _find_npc_at(self, x, y):
+        for entity in self.current_map.entities:
+            if isinstance(entity, NPCDef):
+                ex, ey = int(entity.x), int(entity.y)
+                if ex == x and ey == y:
+                    return (entity.x, entity.y)
+        return None
 
     def _handle_right_click(self, x, y):
         grid_x = (x - self.canvas_offset_x) // self.tile_size
@@ -274,7 +287,26 @@ class Editor:
                     ex, ey = int(entity.x), int(entity.y)
                     if ex == grid_x and ey == grid_y:
                         del self.current_map.entities[i]
+                        if (ex, ey) in self.npc_paths:
+                            del self.npc_paths[(ex, ey)]
                         break
+            elif self.mode == "path":
+                if self.selected_npc_for_path:
+                    key = (
+                        int(self.selected_npc_for_path[0]),
+                        int(self.selected_npc_for_path[1]),
+                    )
+                    if key in self.npc_paths and self.npc_paths[key]:
+                        self.npc_paths[key].pop()
+                else:
+                    for i, entity in enumerate(self.current_map.entities):
+                        if isinstance(entity, NPCDef):
+                            ex, ey = int(entity.x), int(entity.y)
+                            if ex == grid_x and ey == grid_y:
+                                if (ex, ey) in self.npc_paths:
+                                    del self.npc_paths[(ex, ey)]
+                                self.selected_npc_for_path = None
+                                break
 
     def save_map(self):
         self.maps_dir.mkdir(exist_ok=True)
@@ -508,6 +540,13 @@ class Editor:
             ey = int(entity.y)
 
             color = (255, 200, 0)
+            is_selected = (
+                self.mode == "path"
+                and self.selected_npc_for_path
+                and int(self.selected_npc_for_path[0]) == ex
+                and int(self.selected_npc_for_path[1]) == ey
+            )
+
             if isinstance(entity, NPCDef):
                 color = (255, 0, 0)
             elif isinstance(entity, TorchDef):
@@ -515,6 +554,7 @@ class Editor:
             elif isinstance(entity, StaticDef):
                 color = (0, 200, 255)
 
+            radius = 12 if is_selected else 10
             pg.draw.circle(
                 self.screen,
                 color,
@@ -522,8 +562,24 @@ class Editor:
                     self.canvas_offset_x + ex * self.tile_size + self.tile_size // 2,
                     self.canvas_offset_y + ey * self.tile_size + self.tile_size // 2,
                 ),
-                10,
+                radius,
             )
+
+            if is_selected:
+                pg.draw.circle(
+                    self.screen,
+                    (255, 255, 0),
+                    (
+                        self.canvas_offset_x
+                        + ex * self.tile_size
+                        + self.tile_size // 2,
+                        self.canvas_offset_y
+                        + ey * self.tile_size
+                        + self.tile_size // 2,
+                    ),
+                    radius + 3,
+                    2,
+                )
 
         if self.current_map.exit_door:
             dx = int(self.current_map.exit_door.x)
@@ -543,19 +599,24 @@ class Editor:
         for npc_pos, path in self.npc_paths.items():
             for i, point in enumerate(path):
                 px, py = point
+                center_x = (
+                    self.canvas_offset_x + px * self.tile_size + self.tile_size // 2
+                )
+                center_y = (
+                    self.canvas_offset_y + py * self.tile_size + self.tile_size // 2
+                )
+
                 pg.draw.circle(
                     self.screen,
                     (0, 255, 255),
-                    (
-                        self.canvas_offset_x
-                        + px * self.tile_size
-                        + self.tile_size // 2,
-                        self.canvas_offset_y
-                        + py * self.tile_size
-                        + self.tile_size // 2,
-                    ),
-                    5,
+                    (center_x, center_y),
+                    8,
                 )
+
+                num_text = self.font.render(str(i + 1), True, (0, 0, 0))
+                text_rect = num_text.get_rect(center=(center_x, center_y))
+                self.screen.blit(num_text, text_rect)
+
                 if i > 0:
                     prev = path[i - 1]
                     pg.draw.line(

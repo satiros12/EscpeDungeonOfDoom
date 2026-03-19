@@ -10,13 +10,22 @@ class Renderer:
         self._load_textures()
 
     def _load_textures(self):
+        wall_colors = [
+            (100, 100, 100),
+            (80, 80, 120),
+            (120, 80, 80),
+            (80, 120, 80),
+            (100, 80, 120),
+        ]
+
         for i in range(1, 8):
             try:
                 img = pg.image.load(f"resources/textures/{i}.png").convert()
                 self.wall_textures[i] = img
             except:
                 surf = pg.Surface((TEXTURE_SIZE, TEXTURE_SIZE))
-                surf.fill((50 * i, 50 * i, 50 * i))
+                color_idx = (i - 1) % len(wall_colors)
+                surf.fill(wall_colors[color_idx])
                 self.wall_textures[i] = surf
 
         try:

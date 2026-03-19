@@ -38,7 +38,10 @@ class Physics:
 
     @staticmethod
     def normalize_angle(angle):
-        angle = angle % (2 * math.pi)
+        TWO_PI = 2 * math.pi
+        angle = angle % TWO_PI
         if angle < 0:
-            angle += 2 * math.pi
+            angle += TWO_PI
+        if abs(angle - TWO_PI) < 0.001:
+            angle = 0.0
         return angle
