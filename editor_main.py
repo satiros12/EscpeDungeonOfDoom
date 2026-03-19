@@ -3,8 +3,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
 
-from src.engine import Game
+from editor import Editor
 
 if __name__ == "__main__":
-    game = Game()
-    game.run()
+    editor = Editor()
+    editor.run()
