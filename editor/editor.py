@@ -61,6 +61,79 @@ class Editor:
             is_final=False,
         )
 
+    @property
+    def entity_categories(self):
+        return {
+            "NPCs": NPC_TYPES,
+            "Torches": ["torch_red", "torch_green"],
+            "Objects": STATIC_SPRITES,
+        }
+
+    def _select_entity_category(self, direction):
+        categories = list(self.entity_categories.keys())
+        current_cat_idx = 0
+        current_cat_name = None
+
+        if self.selected_entity_type in NPC_TYPES:
+            current_cat_name = "NPCs"
+        elif self.selected_entity_type in ["torch_red", "torch_green"]:
+            current_cat_name = "Torches"
+        elif self.selected_entity_type in STATIC_SPRITES:
+            current_cat_name = "Objects"
+
+        if current_cat_name:
+            current_cat_idx = categories.index(current_cat_name)
+
+        new_cat_idx = (current_cat_idx + direction) % len(categories)
+        new_cat_name = categories[new_cat_idx]
+
+        if new_cat_name == "NPCs":
+            self.selected_entity_type = NPC_TYPES[0]
+        elif new_cat_name == "Torches":
+            self.selected_entity_type = "torch_red"
+        elif new_cat_name == "Objects":
+            self.selected_entity_type = STATIC_SPRITES[0]
+
+    def _select_next_entity(self):
+        all_entities = []
+        for cat_name, entities in self.entity_categories.items():
+            all_entities.extend(entities)
+
+        if self.selected_entity_type not in all_entities:
+            self.selected_entity_type = all_entities[0]
+            return
+
+        idx = all_entities.index(self.selected_entity_type)
+        self.selected_entity_type = all_entities[(idx + 1) % len(all_entities)]
+
+    def _select_prev_entity(self):
+        all_entities = []
+        for cat_name, entities in self.entity_categories.items():
+            all_entities.extend(entities)
+
+        if self.selected_entity_type not in all_entities:
+            self.selected_entity_type = all_entities[0]
+            return
+
+        idx = all_entities.index(self.selected_entity_type)
+        self.selected_entity_type = all_entities[(idx - 1) % len(all_entities)]
+
+    def _select_next_entity_in_path_mode(self):
+        if self.selected_npc_for_path:
+            idx = list(self.npc_paths.keys()).index(self.selected_npc_for_path)
+            keys = list(self.npc_paths.keys())
+            self.selected_npc_for_path = keys[(idx + 1) % len(keys)]
+        elif self.npc_paths:
+            self.selected_npc_for_path = list(self.npc_paths.keys())[0]
+
+    def _select_prev_entity_in_path_mode(self):
+        if self.selected_npc_for_path:
+            idx = list(self.npc_paths.keys()).index(self.selected_npc_for_path)
+            keys = list(self.npc_paths.keys())
+            self.selected_npc_for_path = keys[(idx - 1) % len(keys)]
+        elif self.npc_paths:
+            self.selected_npc_for_path = list(self.npc_paths.keys())[0]
+
     def run(self):
         running = True
         while running:
@@ -97,6 +170,30 @@ class Editor:
                     self.current_map = self._create_new_map("level1")
                     self.npc_paths = {}
 
+                elif self.mode == "paint":
+                    if event.key == pg.K_LEFT:
+                        self.selected_tile = max(0, self.selected_tile - 1)
+                    elif event.key == pg.K_RIGHT:
+                        self.selected_tile = min(4, self.selected_tile + 1)
+
+                elif self.mode == "entity":
+                    if event.key == pg.K_LEFT:
+                        self._select_prev_entity()
+                    elif event.key == pg.K_RIGHT:
+                        self._select_next_entity()
+                    elif event.key == pg.K_UP:
+                        self._select_entity_category(-1)
+                    elif event.key == pg.K_DOWN:
+                        self._select_entity_category(1)
+
+                elif self.mode == "path":
+                    if event.key == pg.K_LEFT:
+                        self._select_prev_entity_in_path_mode()
+                    elif event.key == pg.K_RIGHT:
+                        self._select_next_entity_in_path_mode()
+                    elif event.key == pg.K_r:
+                        self.npc_paths = {}
+
             elif event.type == pg.MOUSEBUTTONDOWN:
                 x, y = event.pos
 
@@ -104,6 +201,16 @@ class Editor:
                     self._handle_left_click(x, y)
                 elif event.button == 3:
                     self._handle_right_click(x, y)
+                elif event.button == 4:
+                    if self.mode == "paint":
+                        self.selected_tile = min(4, self.selected_tile + 1)
+                    elif self.mode == "entity":
+                        self._select_next_entity()
+                elif event.button == 5:
+                    if self.mode == "paint":
+                        self.selected_tile = max(0, self.selected_tile - 1)
+                    elif self.mode == "entity":
+                        self._select_prev_entity()
 
     def _handle_left_click(self, x, y):
         grid_x = (x - self.canvas_offset_x) // self.tile_size
@@ -128,8 +235,11 @@ class Editor:
                         y=entity_y,
                         patrol=patrol,
                     )
-                elif self.selected_entity_type == "torch":
-                    entity = TorchDef(x=entity_x, y=entity_y)
+                elif self.selected_entity_type in ["torch_red", "torch_green"]:
+                    color = (
+                        "red" if self.selected_entity_type == "torch_red" else "green"
+                    )
+                    entity = TorchDef(x=entity_x, y=entity_y, color=color)
                 elif self.selected_entity_type in STATIC_SPRITES:
                     entity = StaticDef(
                         sprite=self.selected_entity_type,
@@ -173,7 +283,64 @@ class Editor:
         print(f"Map saved to {path}")
 
     def toggle_preview(self):
-        pass
+        self.save_map()
+
+        sys.path.insert(0, str(Path(__file__).parent.parent))
+        from src.engine import Game
+
+        self.preview_game = Game()
+        map_path = self.maps_dir / f"{self.current_map.name}.json"
+        self.preview_game.load_map(str(map_path))
+        self.preview_game.set_state("preview")
+
+        self.preview_loop()
+
+    def preview_loop(self):
+        running = True
+        while running and self.preview_game:
+            for event in pg.event.get():
+                if event.type == pg.QUIT:
+                    running = False
+                    pg.quit()
+                elif event.type == pg.KEYDOWN:
+                    if event.key == pg.K_ESCAPE:
+                        running = False
+                    elif event.key == pg.K_w:
+                        keys = pg.key.get_pressed()
+                        self._move_preview_player(0, -0.1)
+                    elif event.key == pg.K_s:
+                        self._move_preview_player(0, 0.1)
+                    elif event.key == pg.K_a:
+                        self._move_preview_player(-0.1, 0)
+                    elif event.key == pg.K_d:
+                        self._move_preview_player(0.1, 0)
+                    elif event.key == pg.K_LEFT:
+                        self.preview_game.player.angle -= 0.05
+                    elif event.key == pg.K_RIGHT:
+                        self.preview_game.player.angle += 0.05
+
+            if self.preview_game:
+                self.preview_game.update()
+                self.preview_game.draw()
+                pg.display.flip()
+                self.preview_game.clock.tick(60)
+
+    def _move_preview_player(self, dx, dy):
+        if self.preview_game and self.preview_game.player:
+            import math
+
+            player = self.preview_game.player
+            angle = player.angle
+            dx_world = dx * math.cos(angle) - dy * math.sin(angle)
+            dy_world = dx * math.sin(angle) + dy * math.cos(angle)
+
+            new_x = player.x + dx_world
+            new_y = player.y + dy_world
+
+            if (int(new_x), int(player.y)) not in self.preview_game.raycaster.world_map:
+                player.x = new_x
+            if (int(player.x), int(new_y)) not in self.preview_game.raycaster.world_map:
+                player.y = new_y
 
     def draw(self):
         self.screen.fill((40, 40, 50))
@@ -206,66 +373,86 @@ class Editor:
 
         y_offset += 20
         if self.mode == "paint":
+            sel_text = self.font.render(
+                f"Selected: Tile {self.selected_tile}", True, (255, 255, 0)
+            )
+            self.screen.blit(sel_text, (10, y_offset))
+            y_offset += 25
+            help_text = self.font.render(
+                "Left/Right arrows to change", True, (100, 100, 100)
+            )
+            self.screen.blit(help_text, (10, y_offset))
+            y_offset += 25
             tiles = [
-                ("Wall (1)", 1),
-                ("Wall (2)", 2),
-                ("Wall (3)", 3),
-                ("Floor (0)", 0),
+                ("[0] Floor", 0),
+                ("[1] Wall Gray", 1),
+                ("[2] Wall Blue", 2),
+                ("[3] Wall Red", 3),
+                ("[4] Wall Green", 4),
             ]
             for label, tile_id in tiles:
-                color = (
-                    (255, 255, 0) if self.selected_tile == tile_id else (200, 200, 200)
-                )
-                text = self.font.render(label, True, color)
+                is_selected = self.selected_tile == tile_id
+                prefix = ">> " if is_selected else "   "
+                color = (255, 255, 0) if is_selected else (200, 200, 200)
+                text = self.font.render(f"{prefix}{label}", True, color)
                 self.screen.blit(text, (10, y_offset))
-                y_offset += 25
+                y_offset += 22
 
         elif self.mode == "entity":
-            y_offset += 10
-            sub_title = self.font.render("NPCs:", True, (150, 150, 150))
-            self.screen.blit(sub_title, (10, y_offset))
+            current_selection = self.selected_entity_type or "None"
+            sel_text = self.font.render(
+                f"Selected: {current_selection}", True, (255, 255, 0)
+            )
+            self.screen.blit(sel_text, (10, y_offset))
             y_offset += 25
 
+            help_text = self.font.render(
+                "Left/Right arrows to change", True, (100, 100, 100)
+            )
+            self.screen.blit(help_text, (10, y_offset))
+            y_offset += 20
+            help_text2 = self.font.render("Up/Down for category", True, (100, 100, 100))
+            self.screen.blit(help_text2, (10, y_offset))
+            y_offset += 30
+
+            sub_title = self.font.render("NPCs:", True, (150, 150, 150))
+            self.screen.blit(sub_title, (10, y_offset))
+            y_offset += 20
+
             for npc_type in NPC_TYPES:
-                color = (
-                    (255, 255, 0)
-                    if self.selected_entity_type == npc_type
-                    else (200, 200, 200)
-                )
-                text = self.font.render(npc_type, True, color)
+                is_selected = self.selected_entity_type == npc_type
+                prefix = ">> " if is_selected else "   "
+                color = (255, 255, 0) if is_selected else (200, 200, 200)
+                text = self.font.render(f"{prefix}{npc_type}", True, color)
                 self.screen.blit(text, (10, y_offset))
-                y_offset += 25
+                y_offset += 20
 
             y_offset += 10
             sub_title = self.font.render("Torches:", True, (150, 150, 150))
             self.screen.blit(sub_title, (10, y_offset))
-            y_offset += 25
+            y_offset += 20
 
             for color in TORCH_COLORS:
-                color_sel = (
-                    (255, 255, 0)
-                    if self.selected_entity_type == "torch"
-                    and self.selected_entity_data == color
-                    else (200, 200, 200)
-                )
-                text = self.font.render(f"{color} torch", True, color_sel)
+                torch_type = f"torch_{color}"
+                is_selected = self.selected_entity_type == torch_type
+                prefix = ">> " if is_selected else "   "
+                color_sel = (255, 255, 0) if is_selected else (200, 200, 200)
+                text = self.font.render(f"{prefix}{color} torch", True, color_sel)
                 self.screen.blit(text, (10, y_offset))
-                y_offset += 25
+                y_offset += 20
 
             y_offset += 10
             sub_title = self.font.render("Objects:", True, (150, 150, 150))
             self.screen.blit(sub_title, (10, y_offset))
-            y_offset += 25
+            y_offset += 20
 
             for sprite in STATIC_SPRITES:
-                color = (
-                    (255, 255, 0)
-                    if self.selected_entity_type == sprite
-                    else (200, 200, 200)
-                )
-                text = self.font.render(sprite, True, color)
+                is_selected = self.selected_entity_type == sprite
+                prefix = ">> " if is_selected else "   "
+                color = (255, 255, 0) if is_selected else (200, 200, 200)
+                text = self.font.render(f"{prefix}{sprite}", True, color)
                 self.screen.blit(text, (10, y_offset))
-                y_offset += 25
+                y_offset += 20
 
         elif self.mode == "door":
             text = self.font.render("Click to place exit door", True, (200, 200, 200))

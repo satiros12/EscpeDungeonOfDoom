@@ -15,8 +15,11 @@ class Menu:
         self.font_title = pg.font.Font(None, 128)
         self.font_options = pg.font.Font(None, 64)
 
-    def handle_input(self):
-        for event in pg.event.get():
+    def handle_input(self, events=None):
+        if events is None:
+            events = pg.event.get()
+
+        for event in events:
             if event.type == pg.QUIT:
                 pg.quit()
                 exit()
@@ -27,6 +30,10 @@ class Menu:
                     self.selected = (self.selected + 1) % len(self.options)
                 elif event.key == pg.K_RETURN:
                     self._select_option()
+                elif event.key == pg.K_w:
+                    self.selected = (self.selected - 1) % len(self.options)
+                elif event.key == pg.K_s:
+                    self.selected = (self.selected + 1) % len(self.options)
 
     def _select_option(self):
         if self.selected == 0:

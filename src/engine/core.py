@@ -69,7 +69,9 @@ class Game:
 
     def check_events(self):
         self.global_trigger = False
-        for event in pg.event.get():
+        events = pg.event.get()
+
+        for event in events:
             if event.type == pg.QUIT:
                 pg.quit()
                 sys.exit()
@@ -81,17 +83,19 @@ class Game:
                         self.set_state("editor")
                     elif self.state == "win":
                         self.set_state("menu")
-                elif event.key == pg.K_ESCAPE and self.state == "menu":
-                    pg.quit()
-                    sys.exit()
+                    elif self.state == "menu":
+                        pg.quit()
+                        sys.exit()
             elif event.type == self.global_event:
                 self.global_trigger = True
 
             if self.state == "game" and self.player:
                 self.player.single_fire_event(event)
 
+        return events
+
     def update(self):
-        if self.state == "game":
+        if self.state in ("game", "preview"):
             self.player.update()
             self.raycaster.update()
             self.entity_manager.update()
@@ -101,21 +105,22 @@ class Game:
         pg.display.set_caption(f"{self.clock.get_fps():.1f}")
 
     def draw(self):
-        if self.state == "game":
+        if self.state in ("game", "preview"):
             self.renderer.draw()
-            self.weapon.draw()
-            self.hud.draw()
+            if self.state == "game":
+                self.weapon.draw()
+                self.hud.draw()
 
     def run(self):
         while True:
-            self.check_events()
+            events = self.check_events()
 
             if self.state == "menu":
                 if not self.menu:
                     from ..view.menu import Menu
 
                     self.menu = Menu(self)
-                self.menu.handle_input()
+                self.menu.handle_input(events)
                 self.menu.draw(self.screen)
             elif self.state == "game":
                 self.update()
