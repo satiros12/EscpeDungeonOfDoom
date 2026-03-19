@@ -8,10 +8,20 @@ class RayCaster:
         self.game = game
         self.ray_casting_result = []
         self.objects_to_render = []
-        self.textures = game.renderer.wall_textures if game.renderer else {}
+
+        if game.renderer and hasattr(game.renderer, "wall_textures"):
+            self.textures = game.renderer.wall_textures
+        else:
+            self.textures = {1: self._create_default_texture()}
+
         self.world_map = {}
         self.torches = []
         self._build_world_map()
+
+    def _create_default_texture(self):
+        surf = pg.Surface((TEXTURE_SIZE, TEXTURE_SIZE))
+        surf.fill((100, 100, 100))
+        return surf
 
     def _build_world_map(self):
         self.world_map = {}
@@ -37,7 +47,7 @@ class RayCaster:
             brightness = self._calculate_light(ray, depth)
 
             if proj_height < RES[1]:
-                tex = self.textures.get(texture, self.textures.get(1))
+                tex = self.textures.get(texture, list(self.textures.values())[0])
                 wall_column = tex.subsurface(
                     offset * (TEXTURE_SIZE - SCALE), 0, SCALE, TEXTURE_SIZE
                 )
@@ -45,7 +55,7 @@ class RayCaster:
                 wall_pos = (ray * SCALE, HALF_HEIGHT - proj_height // 2)
             else:
                 texture_height = TEXTURE_SIZE * RES[1] / proj_height
-                tex = self.textures.get(texture, self.textures.get(1))
+                tex = self.textures.get(texture, list(self.textures.values())[0])
                 wall_column = tex.subsurface(
                     offset * (TEXTURE_SIZE - SCALE),
                     HALF_TEXTURE_SIZE - texture_height // 2,
