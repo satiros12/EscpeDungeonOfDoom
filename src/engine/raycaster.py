@@ -37,14 +37,16 @@ class RayCaster:
             brightness = self._calculate_light(ray, depth)
 
             if proj_height < RES[1]:
-                wall_column = self.textures[texture].subsurface(
+                tex = self.textures.get(texture, self.textures.get(1))
+                wall_column = tex.subsurface(
                     offset * (TEXTURE_SIZE - SCALE), 0, SCALE, TEXTURE_SIZE
                 )
                 wall_column = pg.transform.scale(wall_column, (SCALE, proj_height))
                 wall_pos = (ray * SCALE, HALF_HEIGHT - proj_height // 2)
             else:
                 texture_height = TEXTURE_SIZE * RES[1] / proj_height
-                wall_column = self.textures[texture].subsurface(
+                tex = self.textures.get(texture, self.textures.get(1))
+                wall_column = tex.subsurface(
                     offset * (TEXTURE_SIZE - SCALE),
                     HALF_TEXTURE_SIZE - texture_height // 2,
                     SCALE,
